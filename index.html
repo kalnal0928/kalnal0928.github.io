@@ -12,23 +12,119 @@
             height: 100vh;
             margin: 0;
             background-color: #f0f0f0;
+            font-family: 'Arial', sans-serif;
+        }
+        .game-container {
+            position: relative;
+            width: 240px;
+            height: 400px;
         }
         #gameBoard {
             border: 2px solid #333;
+            background-color: #fff;
+        }
+        .start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+        }
+        .title {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .instructions {
+            margin-bottom: 20px;
+            font-size: 14px;
+            padding: 0 10px;
+        }
+        .start-btn {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .start-btn:hover {
+            background-color: #45a049;
+        }
+        .game-over {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+        }
+        .score-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: black;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <canvas id="gameBoard" width="240" height="400"></canvas>
+    <div class="game-container">
+        <canvas id="gameBoard" width="240" height="400"></canvas>
+        <div class="score-display">점수: <span id="score">0</span></div>
+        
+        <div id="startScreen" class="start-screen">
+            <div class="title">테트리스 게임</div>
+            <div class="instructions">
+                <p>조작 방법:</p>
+                <p>← → : 좌우 이동</p>
+                <p>↑ : 블록 회전</p>
+                <p>↓ : 빠르게 내리기</p>
+            </div>
+            <button id="startBtn" class="start-btn">게임 시작</button>
+        </div>
+        
+        <div id="gameOverScreen" class="start-screen" style="display: none;">
+            <div class="title">게임 오버</div>
+            <div class="instructions">
+                <p>최종 점수: <span id="finalScore">0</span></p>
+            </div>
+            <button id="restartBtn" class="start-btn">다시 시작</button>
+        </div>
+    </div>
+
     <script>
         const canvas = document.getElementById('gameBoard');
         const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const startBtn = document.getElementById('startBtn');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const restartBtn = document.getElementById('restartBtn');
+        const scoreDisplay = document.getElementById('score');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        
         const ROWS = 20;
         const COLS = 12;
         const BLOCK_SIZE = 20;
         let board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
         let currentPiece;
         let score = 0;
+        let gameInterval;
+        let gameRunning = false;
 
         const SHAPES = [
             [[1, 1, 1, 1]],
@@ -40,10 +136,22 @@
             [[0, 1, 1], [1, 1, 0]]
         ];
 
+        const COLORS = [
+            '#FF0D72', // 빨강
+            '#0DC2FF', // 하늘색
+            '#0DFF72', // 연두색
+            '#F538FF', // 분홍색
+            '#FF8E0D', // 주황색
+            '#FFE138', // 노랑
+            '#3877FF'  // 파랑
+        ];
+
         function createPiece() {
-            const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+            const shapeIndex = Math.floor(Math.random() * SHAPES.length);
+            const shape = SHAPES[shapeIndex];
             return {
                 shape,
+                color: COLORS[shapeIndex],
                 x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2),
                 y: 0
             };
@@ -56,7 +164,8 @@
             for (let y = 0; y < ROWS; y++) {
                 for (let x = 0; x < COLS; x++) {
                     if (board[y][x]) {
-                        ctx.fillStyle = '#000';
+                        const colorIndex = board[y][x] - 1;
+                        ctx.fillStyle = COLORS[colorIndex];
                         ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
                     }
                 }
@@ -64,7 +173,9 @@
         }
 
         function drawPiece() {
-            ctx.fillStyle = '#f00';
+            if (!currentPiece) return;
+            
+            ctx.fillStyle = currentPiece.color;
             currentPiece.shape.forEach((row, y) => {
                 row.forEach((value, x) => {
                     if (value) {
@@ -75,27 +186,43 @@
         }
 
         function collision() {
+            if (!currentPiece) return false;
+            
             return currentPiece.shape.some((row, y) => {
                 return row.some((value, x) => {
-                    if (value && (board[y + currentPiece.y] && board[y + currentPiece.y][x + currentPiece.x]) !== 0) {
-                        return true;
-                    }
+                    const boardY = y + currentPiece.y;
+                    const boardX = x + currentPiece.x;
+                    
+                    // 블록이 아니면 무시
+                    if (!value) return false;
+                    
+                    // 게임판 밖으로 나갔는지 확인
+                    if (boardY >= ROWS || boardX < 0 || boardX >= COLS) return true;
+                    
+                    // 이미 블록이 있는지 확인
+                    if (board[boardY] && board[boardY][boardX]) return true;
+                    
                     return false;
                 });
             });
         }
 
         function merge() {
+            if (!currentPiece) return;
+            
+            const colorIndex = COLORS.indexOf(currentPiece.color) + 1;
             currentPiece.shape.forEach((row, y) => {
                 row.forEach((value, x) => {
                     if (value) {
-                        board[y + currentPiece.y][x + currentPiece.x] = value;
+                        board[y + currentPiece.y][x + currentPiece.x] = colorIndex;
                     }
                 });
             });
         }
 
         function rotate() {
+            if (!currentPiece) return;
+            
             const rotated = currentPiece.shape[0].map((_, i) =>
                 currentPiece.shape.map(row => row[i]).reverse()
             );
@@ -113,51 +240,95 @@
                     board.splice(y, 1);
                     board.unshift(Array(COLS).fill(0));
                     linesCleared++;
+                    y++; // 한 줄을 지우면 인덱스가 변하므로 다시 검사
                 }
             }
-            score += linesCleared * 100;
+            
+            if (linesCleared > 0) {
+                score += linesCleared * 100;
+                scoreDisplay.textContent = score;
+            }
         }
 
-        function gameLoop() {
+        function gameOver() {
+            cancelAnimationFrame(gameInterval);
+            gameRunning = false;
+            finalScoreDisplay.textContent = score;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        function update() {
+            if (!gameRunning) return;
+            
             currentPiece.y++;
             if (collision()) {
                 currentPiece.y--;
                 merge();
                 clearLines();
+                
                 currentPiece = createPiece();
                 if (collision()) {
-                    alert('Game Over! Score: ' + score);
-                    board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-                    score = 0;
+                    gameOver();
+                    return;
                 }
             }
-            drawBoard();
-            drawPiece();
-            requestAnimationFrame(gameLoop);
+            
+            draw();
+            gameInterval = requestAnimationFrame(update);
         }
 
-        document.addEventListener('keydown', event => {
+        function draw() {
+            drawBoard();
+            drawPiece();
+        }
+
+        function startGame() {
+            // 게임 초기화
+            board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+            score = 0;
+            scoreDisplay.textContent = score;
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            
+            // 게임 시작
+            currentPiece = createPiece();
+            gameRunning = true;
+            gameInterval = requestAnimationFrame(update);
+            
+            // 키보드 이벤트 리스너 추가
+            document.addEventListener('keydown', handleKeyPress);
+        }
+
+        function handleKeyPress(event) {
+            if (!gameRunning) return;
+            
             switch (event.keyCode) {
-                case 37: // left
+                case 37: // 왼쪽 화살표
                     currentPiece.x--;
                     if (collision()) currentPiece.x++;
                     break;
-                case 39: // right
+                case 39: // 오른쪽 화살표
                     currentPiece.x++;
                     if (collision()) currentPiece.x--;
                     break;
-                case 40: // down
+                case 40: // 아래쪽 화살표
                     currentPiece.y++;
                     if (collision()) currentPiece.y--;
                     break;
-                case 38: // up (rotate)
+                case 38: // 위쪽 화살표 (회전)
                     rotate();
                     break;
             }
-        });
+            
+            draw();
+        }
 
-        currentPiece = createPiece();
-        gameLoop();
+        // 게임 시작 및 재시작 버튼 이벤트 리스너
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', startGame);
+        
+        // 초기 보드 그리기
+        drawBoard();
     </script>
 </body>
 </html>
