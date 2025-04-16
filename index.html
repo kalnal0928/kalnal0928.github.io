@@ -5,23 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>테트리스 게임</title>
     <style>
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
         body {
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
+            padding: 10px;
             background-color: #f0f0f0;
             font-family: 'Arial', sans-serif;
         }
         .game-wrapper {
             display: flex;
+            flex-direction: row;
             gap: 20px;
+            max-width: 100%;
+            margin: auto;
         }
         .game-container {
             position: relative;
             width: 240px;
             height: 400px;
+            max-width: 100%;
+            max-height: 80vh;
+        }
+        #gameBoard {
+            border: 2px solid #333;
+            background-color: #fff;
+            width: 100%;
+            height: 100%;
         }
         .side-panel {
             display: flex;
@@ -48,10 +64,6 @@
             justify-content: center;
             align-items: center;
         }
-        #gameBoard {
-            border: 2px solid #333;
-            background-color: #fff;
-        }
         .start-screen {
             position: absolute;
             top: 0;
@@ -65,6 +77,7 @@
             align-items: center;
             color: white;
             text-align: center;
+            z-index: 10;
         }
         .title {
             font-size: 24px;
@@ -75,7 +88,7 @@
             font-size: 14px;
             padding: 0 10px;
         }
-        .start-btn {
+        .start-btn, .control-btn {
             padding: 10px 20px;
             background-color: #4CAF50;
             color: white;
@@ -83,24 +96,10 @@
             border-radius: 5px;
             cursor: pointer;
             font-size: 16px;
+            margin: 5px;
         }
-        .start-btn:hover {
+        .start-btn:hover, .control-btn:hover {
             background-color: #45a049;
-        }
-        .game-over {
-            display: none;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            text-align: center;
         }
         .info-panel {
             background-color: #fff;
@@ -127,6 +126,73 @@
             font-size: 12px;
             width: 30px;
         }
+        /* 모바일 컨트롤 스타일 */
+        .mobile-controls {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+            width: 100%;
+        }
+        .touch-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 10px;
+            width: 210px;
+        }
+        .touch-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 15px 0;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .touch-btn:active {
+            background-color: #367c39;
+        }
+        .move-left {
+            grid-column: 1;
+            grid-row: 1;
+        }
+        .rotate {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        .move-right {
+            grid-column: 3;
+            grid-row: 1;
+        }
+        .drop {
+            grid-column: 2;
+            grid-row: 2;
+        }
+        
+        /* 반응형 레이아웃 */
+        @media (max-width: 600px) {
+            .game-wrapper {
+                flex-direction: column;
+                align-items: center;
+            }
+            .game-container {
+                width: 240px;
+                height: 400px;
+            }
+            .side-panel {
+                flex-direction: row;
+                flex-wrap: wrap;
+                justify-content: center;
+                width: 100%;
+            }
+            .mobile-controls {
+                display: flex;
+            }
+        }
     </style>
 </head>
 <body>
@@ -137,11 +203,12 @@
             <div id="startScreen" class="start-screen">
                 <div class="title">테트리스 게임</div>
                 <div class="instructions">
-                    <p>조작 방법:</p>
+                    <p>PC 조작 방법:</p>
                     <p>← → : 좌우 이동</p>
                     <p>↑ : 블록 회전</p>
                     <p>↓ : 빠르게 내리기</p>
                     <p>+ - : 속도 조절</p>
+                    <p>모바일: 화면 터치 컨트롤 사용</p>
                 </div>
                 <button id="startBtn" class="start-btn">게임 시작</button>
             </div>
@@ -171,6 +238,19 @@
                 <canvas id="nextBlockCanvas" width="80" height="80"></canvas>
             </div>
         </div>
+
+        <!-- 모바일 컨트롤 -->
+        <div class="mobile-controls">
+            <div class="touch-controls">
+                <button class="touch-btn move-left" id="moveLeft">←</button>
+                <button class="touch-btn rotate" id="rotate">↑</button>
+                <button class="touch-btn move-right" id="moveRight">→</button>
+                <button class="touch-btn drop" id="drop">↓</button>
+            </div>
+            <div style="margin-top: 10px;">
+                <button id="pauseBtn" class="control-btn">일시정지</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -188,10 +268,17 @@
         const finalLevelDisplay = document.getElementById('finalLevel');
         const speedUpBtn = document.getElementById('speedUp');
         const speedDownBtn = document.getElementById('speedDown');
+        const pauseBtn = document.getElementById('pauseBtn');
+        
+        // 모바일 컨트롤 버튼들
+        const moveLeftBtn = document.getElementById('moveLeft');
+        const moveRightBtn = document.getElementById('moveRight');
+        const rotateBtn = document.getElementById('rotate');
+        const dropBtn = document.getElementById('drop');
         
         const ROWS = 20;
         const COLS = 12;
-        const BLOCK_SIZE = 20;
+        let BLOCK_SIZE = 20; // 블록 사이즈 (반응형으로 변경됨)
         const NEXT_BLOCK_SIZE = 15;
         let board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
         let currentPiece;
@@ -202,6 +289,8 @@
         let gameInterval;
         let renderInterval;
         let gameRunning = false;
+        let gamePaused = false;
+        let isMobile = false;
 
         const SHAPES = [
             [[1, 1, 1, 1]],                  // I
@@ -222,6 +311,39 @@
             '#FFE138', // 노랑
             '#3877FF'  // 파랑
         ];
+
+        // 디바이스 체크 및 환경 설정
+        function checkDevice() {
+            isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
+            // 모바일이 아니더라도 화면 크기가 작으면 모바일로 간주
+            if (window.innerWidth <= 600) {
+                isMobile = true;
+            }
+            
+            // 화면 크기에 맞게 게임보드 크기 조정
+            resizeGameBoard();
+        }
+
+        // 화면 크기에 따라 게임보드 리사이징
+        function resizeGameBoard() {
+            const gameContainer = document.querySelector('.game-container');
+            const containerWidth = gameContainer.clientWidth;
+            const containerHeight = gameContainer.clientHeight;
+            
+            // 블록 크기 계산
+            BLOCK_SIZE = Math.floor(Math.min(containerWidth / COLS, containerHeight / ROWS));
+            
+            // 캔버스 크기 설정
+            canvas.width = BLOCK_SIZE * COLS;
+            canvas.height = BLOCK_SIZE * ROWS;
+            
+            // 게임이 실행 중이면 화면 다시 그리기
+            if (gameRunning) {
+                drawBoard();
+                drawPiece();
+            }
+        }
 
         function createPiece() {
             const shapeIndex = Math.floor(Math.random() * SHAPES.length);
@@ -334,9 +456,14 @@
             );
             const prevShape = currentPiece.shape;
             currentPiece.shape = rotated;
+            
+            // 회전 후 충돌 발생하면 원위치
             if (collision()) {
                 currentPiece.shape = prevShape;
+                return false;
             }
+            
+            return true;
         }
 
         function clearLines() {
@@ -369,20 +496,23 @@
             // 레벨이 올라갈수록 속도가 빨라짐 (하한값은 100ms)
             clearInterval(gameInterval);
             dropSpeed = Math.max(1000 - (level - 1) * 100, 100);
-            gameInterval = setInterval(dropBlock, dropSpeed);
+            if (!gamePaused) {
+                gameInterval = setInterval(dropBlock, dropSpeed);
+            }
         }
 
         function gameOver() {
             clearInterval(gameInterval);
             clearInterval(renderInterval);
             gameRunning = false;
+            gamePaused = false;
             finalScoreDisplay.textContent = score;
             finalLevelDisplay.textContent = level;
             gameOverScreen.style.display = 'flex';
         }
 
         function dropBlock() {
-            if (!gameRunning) return;
+            if (!gameRunning || gamePaused) return;
             
             currentPiece.y++;
             if (collision()) {
@@ -405,12 +535,30 @@
         }
 
         function render() {
-            if (!gameRunning) return;
+            if (!gameRunning || gamePaused) return;
             drawBoard();
             drawPiece();
         }
 
+        function togglePause() {
+            if (!gameRunning) return;
+            
+            gamePaused = !gamePaused;
+            pauseBtn.textContent = gamePaused ? '계속하기' : '일시정지';
+            
+            if (gamePaused) {
+                // 게임 일시정지
+                clearInterval(gameInterval);
+            } else {
+                // 게임 재개
+                gameInterval = setInterval(dropBlock, dropSpeed);
+            }
+        }
+
         function startGame() {
+            // 디바이스 체크
+            checkDevice();
+            
             // 게임 초기화
             board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
             score = 0;
@@ -420,6 +568,7 @@
             levelDisplay.textContent = level;
             startScreen.style.display = 'none';
             gameOverScreen.style.display = 'none';
+            pauseBtn.textContent = '일시정지';
             
             // 게임 시작
             nextPiece = createPiece(); // 다음 블록 먼저 생성
@@ -427,6 +576,7 @@
             drawNextBlock(); // 다음 블록 그리기
             
             gameRunning = true;
+            gamePaused = false;
             
             // 블록 떨어지는 인터벌 설정
             gameInterval = setInterval(dropBlock, dropSpeed);
@@ -438,24 +588,45 @@
             document.addEventListener('keydown', handleKeyPress);
         }
 
+        function moveLeft() {
+            if (!gameRunning || gamePaused) return;
+            currentPiece.x--;
+            if (collision()) currentPiece.x++;
+        }
+
+        function moveRight() {
+            if (!gameRunning || gamePaused) return;
+            currentPiece.x++;
+            if (collision()) currentPiece.x--;
+        }
+
+        function moveDown() {
+            if (!gameRunning || gamePaused) return;
+            currentPiece.y++;
+            if (collision()) currentPiece.y--;
+        }
+
         function handleKeyPress(event) {
-            if (!gameRunning) return;
+            if (!gameRunning || gamePaused) return;
             
             switch (event.keyCode) {
                 case 37: // 왼쪽 화살표
-                    currentPiece.x--;
-                    if (collision()) currentPiece.x++;
+                    moveLeft();
                     break;
                 case 39: // 오른쪽 화살표
-                    currentPiece.x++;
-                    if (collision()) currentPiece.x--;
+                    moveRight();
                     break;
                 case 40: // 아래쪽 화살표
-                    currentPiece.y++;
-                    if (collision()) currentPiece.y--;
+                    moveDown();
                     break;
                 case 38: // 위쪽 화살표 (회전)
                     rotate();
+                    break;
+                case 32: // 스페이스바 (일시정지/재개)
+                    togglePause();
+                    break;
+                case 80: // P 키 (일시정지/재개)
+                    togglePause();
                     break;
             }
         }
@@ -464,25 +635,101 @@
             if (!gameRunning) return;
             clearInterval(gameInterval);
             dropSpeed = Math.max(dropSpeed - 100, 100);
-            gameInterval = setInterval(dropBlock, dropSpeed);
+            if (!gamePaused) {
+                gameInterval = setInterval(dropBlock, dropSpeed);
+            }
         }
 
         function decreaseSpeed() {
             if (!gameRunning) return;
             clearInterval(gameInterval);
             dropSpeed = Math.min(dropSpeed + 100, 2000);
-            gameInterval = setInterval(dropBlock, dropSpeed);
+            if (!gamePaused) {
+                gameInterval = setInterval(dropBlock, dropSpeed);
+            }
         }
 
+        // 스와이프 감지를 위한 변수
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchEndX = 0;
+        let touchEndY = 0;
+
+        // 터치 이벤트 (스와이프) 처리
+        function handleTouchStart(event) {
+            if (!gameRunning || gamePaused) return;
+            touchStartX = event.touches[0].clientX;
+            touchStartY = event.touches[0].clientY;
+        }
+
+        function handleTouchMove(event) {
+            if (!gameRunning || gamePaused) return;
+            // 스크롤 방지
+            event.preventDefault();
+        }
+
+        function handleTouchEnd(event) {
+            if (!gameRunning || gamePaused) return;
+            
+            touchEndX = event.changedTouches[0].clientX;
+            touchEndY = event.changedTouches[0].clientY;
+            
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+            
+            // 스와이프 감지를 위한 최소 거리
+            const minSwipeDistance = 30;
+            
+            // 수평 스와이프가 수직보다 크면 좌우 이동
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX > minSwipeDistance) {
+                    // 오른쪽으로 스와이프
+                    moveRight();
+                } else if (diffX < -minSwipeDistance) {
+                    // 왼쪽으로 스와이프
+                    moveLeft();
+                }
+            } else {
+                // 수직 스와이프가 수평보다 크면 회전 또는 빠른 낙하
+                if (diffY > minSwipeDistance) {
+                    // 아래로 스와이프
+                    moveDown();
+                } else if (diffY < -minSwipeDistance) {
+                    // 위로 스와이프
+                    rotate();
+                }
+            }
+        }
+
+        // 화면 크기 변경 시 게임보드 리사이징
+        window.addEventListener('resize', function() {
+            checkDevice();
+        });
+        
         // 게임 시작 및 재시작 버튼 이벤트 리스너
         startBtn.addEventListener('click', startGame);
         restartBtn.addEventListener('click', startGame);
+        
+        // 일시정지 버튼 이벤트 리스너
+        pauseBtn.addEventListener('click', togglePause);
         
         // 속도 조절 버튼 이벤트 리스너
         speedUpBtn.addEventListener('click', increaseSpeed);
         speedDownBtn.addEventListener('click', decreaseSpeed);
         
-        // 초기 보드 그리기
+        // 모바일 터치 컨트롤 버튼 이벤트 리스너
+        moveLeftBtn.addEventListener('click', moveLeft);
+        moveRightBtn.addEventListener('click', moveRight);
+        rotateBtn.addEventListener('click', rotate);
+        dropBtn.addEventListener('click', moveDown);
+        
+        // 모바일 터치 이벤트 (스와이프) 리스너
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd);
+        
+        // 프로그램 시작 시 디바이스 체크 및 초기 보드 그리기
+        checkDevice();
         drawBoard();
     </script>
 </body>
