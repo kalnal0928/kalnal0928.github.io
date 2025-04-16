@@ -14,10 +14,39 @@
             background-color: #f0f0f0;
             font-family: 'Arial', sans-serif;
         }
+        .game-wrapper {
+            display: flex;
+            gap: 20px;
+        }
         .game-container {
             position: relative;
             width: 240px;
             height: 400px;
+        }
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .next-block-container {
+            width: 100px;
+            height: 100px;
+            background-color: #fff;
+            border: 2px solid #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .next-block-title {
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        .next-block-display {
+            width: 80px;
+            height: 80px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         #gameBoard {
             border: 2px solid #333;
@@ -73,74 +102,82 @@
             color: white;
             text-align: center;
         }
-        .score-display {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            color: black;
-            font-weight: bold;
+        .info-panel {
+            background-color: #fff;
+            border: 2px solid #333;
+            padding: 10px;
+            width: 100px;
         }
-        .level-display {
-            position: absolute;
-            top: 30px;
-            right: 10px;
-            color: black;
+        .score-display, .level-display {
+            margin-bottom: 10px;
             font-weight: bold;
         }
         .controls {
-            position: absolute;
-            top: 50px;
-            right: 10px;
-            color: black;
-            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
         }
         .controls button {
-            margin: 2px;
-            padding: 2px 5px;
+            padding: 5px;
             background-color: #4CAF50;
             color: white;
             border: none;
             border-radius: 3px;
             cursor: pointer;
             font-size: 12px;
+            width: 30px;
         }
     </style>
 </head>
 <body>
-    <div class="game-container">
-        <canvas id="gameBoard" width="240" height="400"></canvas>
-        <div class="score-display">점수: <span id="score">0</span></div>
-        <div class="level-display">레벨: <span id="level">1</span></div>
-        <div class="controls">
-            <button id="speedUp">+</button>
-            <button id="speedDown">-</button>
+    <div class="game-wrapper">
+        <div class="game-container">
+            <canvas id="gameBoard" width="240" height="400"></canvas>
+            
+            <div id="startScreen" class="start-screen">
+                <div class="title">테트리스 게임</div>
+                <div class="instructions">
+                    <p>조작 방법:</p>
+                    <p>← → : 좌우 이동</p>
+                    <p>↑ : 블록 회전</p>
+                    <p>↓ : 빠르게 내리기</p>
+                    <p>+ - : 속도 조절</p>
+                </div>
+                <button id="startBtn" class="start-btn">게임 시작</button>
+            </div>
+            
+            <div id="gameOverScreen" class="start-screen" style="display: none;">
+                <div class="title">게임 오버</div>
+                <div class="instructions">
+                    <p>최종 점수: <span id="finalScore">0</span></p>
+                    <p>최종 레벨: <span id="finalLevel">1</span></p>
+                </div>
+                <button id="restartBtn" class="start-btn">다시 시작</button>
+            </div>
         </div>
         
-        <div id="startScreen" class="start-screen">
-            <div class="title">테트리스 게임</div>
-            <div class="instructions">
-                <p>조작 방법:</p>
-                <p>← → : 좌우 이동</p>
-                <p>↑ : 블록 회전</p>
-                <p>↓ : 빠르게 내리기</p>
-                <p>+ - : 속도 조절</p>
+        <div class="side-panel">
+            <div class="info-panel">
+                <div class="score-display">점수: <span id="score">0</span></div>
+                <div class="level-display">레벨: <span id="level">1</span></div>
+                <div class="controls">
+                    <button id="speedDown">-</button>
+                    <button id="speedUp">+</button>
+                </div>
             </div>
-            <button id="startBtn" class="start-btn">게임 시작</button>
-        </div>
-        
-        <div id="gameOverScreen" class="start-screen" style="display: none;">
-            <div class="title">게임 오버</div>
-            <div class="instructions">
-                <p>최종 점수: <span id="finalScore">0</span></p>
-                <p>최종 레벨: <span id="finalLevel">1</span></p>
+            
+            <div class="next-block-container">
+                <div class="next-block-title">다음 블록</div>
+                <canvas id="nextBlockCanvas" width="80" height="80"></canvas>
             </div>
-            <button id="restartBtn" class="start-btn">다시 시작</button>
         </div>
     </div>
 
     <script>
         const canvas = document.getElementById('gameBoard');
         const ctx = canvas.getContext('2d');
+        const nextBlockCanvas = document.getElementById('nextBlockCanvas');
+        const nextBlockCtx = nextBlockCanvas.getContext('2d');
         const startScreen = document.getElementById('startScreen');
         const startBtn = document.getElementById('startBtn');
         const gameOverScreen = document.getElementById('gameOverScreen');
@@ -155,8 +192,10 @@
         const ROWS = 20;
         const COLS = 12;
         const BLOCK_SIZE = 20;
+        const NEXT_BLOCK_SIZE = 15;
         let board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
         let currentPiece;
+        let nextPiece;
         let score = 0;
         let level = 1;
         let dropSpeed = 1000; // 초기 속도: 1000ms (1초)
@@ -165,13 +204,13 @@
         let gameRunning = false;
 
         const SHAPES = [
-            [[1, 1, 1, 1]],
-            [[1, 1], [1, 1]],
-            [[1, 1, 1], [0, 1, 0]],
-            [[1, 1, 1], [1, 0, 0]],
-            [[1, 1, 1], [0, 0, 1]],
-            [[1, 1, 0], [0, 1, 1]],
-            [[0, 1, 1], [1, 1, 0]]
+            [[1, 1, 1, 1]],                  // I
+            [[1, 1], [1, 1]],                // O
+            [[1, 1, 1], [0, 1, 0]],          // T
+            [[1, 1, 1], [1, 0, 0]],          // L
+            [[1, 1, 1], [0, 0, 1]],          // J
+            [[1, 1, 0], [0, 1, 1]],          // S
+            [[0, 1, 1], [1, 1, 0]]           // Z
         ];
 
         const COLORS = [
@@ -218,6 +257,35 @@
                 row.forEach((value, x) => {
                     if (value) {
                         ctx.fillRect((currentPiece.x + x) * BLOCK_SIZE, (currentPiece.y + y) * BLOCK_SIZE, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+                    }
+                });
+            });
+        }
+
+        function drawNextBlock() {
+            if (!nextPiece) return;
+            
+            // 캔버스 초기화
+            nextBlockCtx.fillStyle = '#fff';
+            nextBlockCtx.fillRect(0, 0, nextBlockCanvas.width, nextBlockCanvas.height);
+            
+            // 블록의 크기와 위치 계산
+            const shapeWidth = nextPiece.shape[0].length * NEXT_BLOCK_SIZE;
+            const shapeHeight = nextPiece.shape.length * NEXT_BLOCK_SIZE;
+            const offsetX = (nextBlockCanvas.width - shapeWidth) / 2;
+            const offsetY = (nextBlockCanvas.height - shapeHeight) / 2;
+            
+            // 다음 블록 그리기
+            nextBlockCtx.fillStyle = nextPiece.color;
+            nextPiece.shape.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value) {
+                        nextBlockCtx.fillRect(
+                            offsetX + x * NEXT_BLOCK_SIZE, 
+                            offsetY + y * NEXT_BLOCK_SIZE, 
+                            NEXT_BLOCK_SIZE - 1, 
+                            NEXT_BLOCK_SIZE - 1
+                        );
                     }
                 });
             });
@@ -322,7 +390,13 @@
                 merge();
                 clearLines();
                 
-                currentPiece = createPiece();
+                // 다음 블록을 현재 블록으로 설정
+                currentPiece = nextPiece;
+                // 새로운 다음 블록 생성
+                nextPiece = createPiece();
+                // 다음 블록 그리기
+                drawNextBlock();
+                
                 if (collision()) {
                     gameOver();
                     return;
@@ -348,7 +422,10 @@
             gameOverScreen.style.display = 'none';
             
             // 게임 시작
-            currentPiece = createPiece();
+            nextPiece = createPiece(); // 다음 블록 먼저 생성
+            currentPiece = createPiece(); // 현재 블록 생성
+            drawNextBlock(); // 다음 블록 그리기
+            
             gameRunning = true;
             
             // 블록 떨어지는 인터벌 설정
