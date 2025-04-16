@@ -80,12 +80,41 @@
             color: black;
             font-weight: bold;
         }
+        .level-display {
+            position: absolute;
+            top: 30px;
+            right: 10px;
+            color: black;
+            font-weight: bold;
+        }
+        .controls {
+            position: absolute;
+            top: 50px;
+            right: 10px;
+            color: black;
+            font-weight: bold;
+        }
+        .controls button {
+            margin: 2px;
+            padding: 2px 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
     <div class="game-container">
         <canvas id="gameBoard" width="240" height="400"></canvas>
         <div class="score-display">점수: <span id="score">0</span></div>
+        <div class="level-display">레벨: <span id="level">1</span></div>
+        <div class="controls">
+            <button id="speedUp">+</button>
+            <button id="speedDown">-</button>
+        </div>
         
         <div id="startScreen" class="start-screen">
             <div class="title">테트리스 게임</div>
@@ -94,6 +123,7 @@
                 <p>← → : 좌우 이동</p>
                 <p>↑ : 블록 회전</p>
                 <p>↓ : 빠르게 내리기</p>
+                <p>+ - : 속도 조절</p>
             </div>
             <button id="startBtn" class="start-btn">게임 시작</button>
         </div>
@@ -102,6 +132,7 @@
             <div class="title">게임 오버</div>
             <div class="instructions">
                 <p>최종 점수: <span id="finalScore">0</span></p>
+                <p>최종 레벨: <span id="finalLevel">1</span></p>
             </div>
             <button id="restartBtn" class="start-btn">다시 시작</button>
         </div>
@@ -115,7 +146,11 @@
         const gameOverScreen = document.getElementById('gameOverScreen');
         const restartBtn = document.getElementById('restartBtn');
         const scoreDisplay = document.getElementById('score');
+        const levelDisplay = document.getElementById('level');
         const finalScoreDisplay = document.getElementById('finalScore');
+        const finalLevelDisplay = document.getElementById('finalLevel');
+        const speedUpBtn = document.getElementById('speedUp');
+        const speedDownBtn = document.getElementById('speedDown');
         
         const ROWS = 20;
         const COLS = 12;
@@ -123,7 +158,10 @@
         let board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
         let currentPiece;
         let score = 0;
+        let level = 1;
+        let dropSpeed = 1000; // 초기 속도: 1000ms (1초)
         let gameInterval;
+        let renderInterval;
         let gameRunning = false;
 
         const SHAPES = [
@@ -245,19 +283,37 @@
             }
             
             if (linesCleared > 0) {
-                score += linesCleared * 100;
+                score += linesCleared * 100 * level;
                 scoreDisplay.textContent = score;
+                
+                // 점수에 따른 레벨 업
+                const newLevel = Math.floor(score / 1000) + 1;
+                if (newLevel > level) {
+                    level = newLevel;
+                    levelDisplay.textContent = level;
+                    // 레벨에 따른 속도 조정
+                    updateDropSpeed();
+                }
             }
         }
 
+        function updateDropSpeed() {
+            // 레벨이 올라갈수록 속도가 빨라짐 (하한값은 100ms)
+            clearInterval(gameInterval);
+            dropSpeed = Math.max(1000 - (level - 1) * 100, 100);
+            gameInterval = setInterval(dropBlock, dropSpeed);
+        }
+
         function gameOver() {
-            cancelAnimationFrame(gameInterval);
+            clearInterval(gameInterval);
+            clearInterval(renderInterval);
             gameRunning = false;
             finalScoreDisplay.textContent = score;
+            finalLevelDisplay.textContent = level;
             gameOverScreen.style.display = 'flex';
         }
 
-        function update() {
+        function dropBlock() {
             if (!gameRunning) return;
             
             currentPiece.y++;
@@ -272,12 +328,10 @@
                     return;
                 }
             }
-            
-            draw();
-            gameInterval = requestAnimationFrame(update);
         }
 
-        function draw() {
+        function render() {
+            if (!gameRunning) return;
             drawBoard();
             drawPiece();
         }
@@ -286,14 +340,22 @@
             // 게임 초기화
             board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
             score = 0;
+            level = 1;
+            dropSpeed = 1000;
             scoreDisplay.textContent = score;
+            levelDisplay.textContent = level;
             startScreen.style.display = 'none';
             gameOverScreen.style.display = 'none';
             
             // 게임 시작
             currentPiece = createPiece();
             gameRunning = true;
-            gameInterval = requestAnimationFrame(update);
+            
+            // 블록 떨어지는 인터벌 설정
+            gameInterval = setInterval(dropBlock, dropSpeed);
+            
+            // 화면 렌더링 인터벌 설정 (60FPS)
+            renderInterval = setInterval(render, 1000 / 60);
             
             // 키보드 이벤트 리스너 추가
             document.addEventListener('keydown', handleKeyPress);
@@ -319,13 +381,29 @@
                     rotate();
                     break;
             }
-            
-            draw();
+        }
+
+        function increaseSpeed() {
+            if (!gameRunning) return;
+            clearInterval(gameInterval);
+            dropSpeed = Math.max(dropSpeed - 100, 100);
+            gameInterval = setInterval(dropBlock, dropSpeed);
+        }
+
+        function decreaseSpeed() {
+            if (!gameRunning) return;
+            clearInterval(gameInterval);
+            dropSpeed = Math.min(dropSpeed + 100, 2000);
+            gameInterval = setInterval(dropBlock, dropSpeed);
         }
 
         // 게임 시작 및 재시작 버튼 이벤트 리스너
         startBtn.addEventListener('click', startGame);
         restartBtn.addEventListener('click', startGame);
+        
+        // 속도 조절 버튼 이벤트 리스너
+        speedUpBtn.addEventListener('click', increaseSpeed);
+        speedDownBtn.addEventListener('click', decreaseSpeed);
         
         // 초기 보드 그리기
         drawBoard();
