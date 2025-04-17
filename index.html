@@ -207,6 +207,8 @@
                     <p>← → : 좌우 이동</p>
                     <p>↑ : 블록 회전</p>
                     <p>↓ : 빠르게 내리기</p>
+                    <p>스페이스바: 즉시 떨어뜨리기</p>
+                    <p>P: 일시정지</p>
                     <p>+ - : 속도 조절</p>
                     <p>모바일: 화면 터치 컨트롤 사용</p>
                 </div>
@@ -248,6 +250,7 @@
                 <button class="touch-btn drop" id="drop">↓</button>
             </div>
             <div style="margin-top: 10px;">
+                <button id="hardDropBtn" class="control-btn">즉시 떨어뜨리기</button>
                 <button id="pauseBtn" class="control-btn">일시정지</button>
             </div>
         </div>
@@ -269,6 +272,7 @@
         const speedUpBtn = document.getElementById('speedUp');
         const speedDownBtn = document.getElementById('speedDown');
         const pauseBtn = document.getElementById('pauseBtn');
+        const hardDropBtn = document.getElementById('hardDropBtn');
         
         // 모바일 컨트롤 버튼들
         const moveLeftBtn = document.getElementById('moveLeft');
@@ -449,6 +453,7 @@
         }
 
         function rotate() {
+            if (!gameRunning || gamePaused) return;
             if (!currentPiece) return;
             
             const rotated = currentPiece.shape[0].map((_, i) =>
@@ -531,6 +536,35 @@
                     gameOver();
                     return;
                 }
+            }
+        }
+
+        // 스페이스바를 이용한 하드 드롭 기능
+        function hardDrop() {
+            if (!gameRunning || gamePaused) return;
+            
+            // 충돌이 발생할 때까지 블록을 아래로 이동
+            while (!collision()) {
+                currentPiece.y++;
+            }
+            
+            // 마지막 충돌 위치에서 한 칸 위로
+            currentPiece.y--;
+            
+            // 블록 병합 및 다음 블록 처리
+            merge();
+            clearLines();
+            
+            // 다음 블록을 현재 블록으로 설정
+            currentPiece = nextPiece;
+            // 새로운 다음 블록 생성
+            nextPiece = createPiece();
+            // 다음 블록 그리기
+            drawNextBlock();
+            
+            if (collision()) {
+                gameOver();
+                return;
             }
         }
 
@@ -622,8 +656,8 @@
                 case 38: // 위쪽 화살표 (회전)
                     rotate();
                     break;
-                case 32: // 스페이스바 (일시정지/재개)
-                    togglePause();
+                case 32: // 스페이스바 (하드 드롭)
+                    hardDrop();
                     break;
                 case 80: // P 키 (일시정지/재개)
                     togglePause();
@@ -701,6 +735,17 @@
             }
         }
 
+        // 더블탭 감지 (하드 드롭)
+        function handleDoubleTap(event) {
+            if (!gameRunning || gamePaused) return;
+            
+            // 더블탭 감지 및 하드 드롭 실행
+            hardDrop();
+            
+            // 이벤트 전파 방지
+            event.preventDefault();
+        }
+
         // 화면 크기 변경 시 게임보드 리사이징
         window.addEventListener('resize', function() {
             checkDevice();
@@ -722,11 +767,15 @@
         moveRightBtn.addEventListener('click', moveRight);
         rotateBtn.addEventListener('click', rotate);
         dropBtn.addEventListener('click', moveDown);
+        hardDropBtn.addEventListener('click', hardDrop);
         
         // 모바일 터치 이벤트 (스와이프) 리스너
         canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
         canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
         canvas.addEventListener('touchend', handleTouchEnd);
+        
+        // 더블탭 이벤트 (하드 드롭) 리스너
+        canvas.addEventListener('dblclick', handleDoubleTap);
         
         // 프로그램 시작 시 디바이스 체크 및 초기 보드 그리기
         checkDevice();
